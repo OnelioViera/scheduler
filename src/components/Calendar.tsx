@@ -1,3 +1,5 @@
+"use client";
+
 import { Calendar as BigCalendar, dateFnsLocalizer } from "react-big-calendar";
 import { format, parse, startOfWeek, getDay } from "date-fns";
 import { enUS } from "date-fns/locale";
@@ -6,6 +8,10 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import { useState } from "react";
 import EventModal from "./EventModal";
 import toast from "react-hot-toast";
+
+interface CalendarProps {
+  readOnly?: boolean;
+}
 
 const locales = {
   "en-US": enUS,
@@ -34,7 +40,7 @@ const calendarStyles = {
   }),
 };
 
-export default function Calendar() {
+export default function Calendar({ readOnly = false }: CalendarProps) {
   const { events, addEvent, updateEvent, deleteEvent } = useScheduleStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -44,15 +50,19 @@ export default function Calendar() {
   } | null>(null);
 
   const handleSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
-    setSelectedSlot({ start, end });
-    setSelectedEvent(null);
-    setIsModalOpen(true);
+    if (!readOnly) {
+      setSelectedSlot({ start, end });
+      setSelectedEvent(null);
+      setIsModalOpen(true);
+    }
   };
 
   const handleSelectEvent = (event: Event) => {
-    setSelectedEvent(event);
-    setSelectedSlot(null);
-    setIsModalOpen(true);
+    if (!readOnly) {
+      setSelectedEvent(event);
+      setSelectedSlot(null);
+      setIsModalOpen(true);
+    }
   };
 
   const handleDeleteEvent = () => {
@@ -185,27 +195,29 @@ export default function Calendar() {
         events={events}
         startAccessor="start"
         endAccessor="end"
-        selectable
+        selectable={!readOnly}
         onSelectSlot={handleSelectSlot}
         onSelectEvent={handleSelectEvent}
         views={["month", "week", "day"]}
         defaultView="month"
       />
-      <EventModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSaveEvent}
-        onDelete={selectedEvent ? handleDeleteEvent : undefined}
-        mode={selectedEvent ? "edit" : "add"}
-        defaultValues={
-          selectedEvent
-            ? {
-                title: selectedEvent.title,
-                description: selectedEvent.description,
-              }
-            : undefined
-        }
-      />
+      {!readOnly && (
+        <EventModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSave={handleSaveEvent}
+          onDelete={selectedEvent ? handleDeleteEvent : undefined}
+          mode={selectedEvent ? "edit" : "add"}
+          defaultValues={
+            selectedEvent
+              ? {
+                  title: selectedEvent.title,
+                  description: selectedEvent.description,
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }

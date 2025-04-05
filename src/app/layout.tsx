@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import StoreInitializer from "../components/StoreInitializer";
+import Navigation from "../components/Navigation";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,8 +19,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className={`${inter.className} bg-white min-h-screen`}>
         <StoreInitializer />
+        <Navigation />
         {children}
         <Toaster
           position="top-right"

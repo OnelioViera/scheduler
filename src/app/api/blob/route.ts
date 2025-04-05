@@ -9,18 +9,27 @@ async function getLatestDataBlob() {
     throw new Error("BLOB_READ_WRITE_TOKEN is not configured");
   }
 
-  const { blobs } = await list({
-    prefix: DATA_PREFIX,
-    limit: 1,
-    token: process.env.BLOB_READ_WRITE_TOKEN,
-  });
-  return blobs[0];
+  try {
+    const { blobs } = await list({
+      prefix: DATA_PREFIX,
+      limit: 1,
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+    return blobs[0];
+  } catch (error) {
+    console.error("Error listing blobs:", error);
+    throw new Error("Failed to list blobs");
+  }
 }
 
 export async function POST(request: Request) {
   try {
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      throw new Error("BLOB_READ_WRITE_TOKEN is not configured");
+      console.error("BLOB_READ_WRITE_TOKEN is not configured");
+      return NextResponse.json(
+        { error: "Storage configuration error" },
+        { status: 500 }
+      );
     }
 
     const { tasks, events } = await request.json();
@@ -56,6 +65,7 @@ export async function POST(request: Request) {
       }
     );
 
+    console.log("Data stored successfully at:", blob.url);
     return NextResponse.json({ url: blob.url });
   } catch (error) {
     console.error("Failed to store data:", error);
@@ -68,24 +78,34 @@ export async function POST(request: Request) {
 export async function GET() {
   try {
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      throw new Error("BLOB_READ_WRITE_TOKEN is not configured");
+      console.error("BLOB_READ_WRITE_TOKEN is not configured");
+      return NextResponse.json(
+        { error: "Storage configuration error" },
+        { status: 500 }
+      );
     }
 
     const latestBlob = await getLatestDataBlob();
 
     if (!latestBlob) {
+      console.log("No existing data found, returning empty arrays");
       return NextResponse.json({ tasks: [], events: [] });
     }
 
+    console.log("Fetching data from blob:", latestBlob.url);
     const response = await fetch(latestBlob.url);
+
     if (!response.ok) {
-      throw new Error("Failed to fetch blob data");
+      console.error("Failed to fetch blob data:", response.statusText);
+      throw new Error(`Failed to fetch blob data: ${response.statusText}`);
     }
 
     const data = await response.json();
+    console.log("Data fetched successfully");
+
     return NextResponse.json({
-      tasks: data.tasks || [],
-      events: data.events || [],
+      tasks: Array.isArray(data.tasks) ? data.tasks : [],
+      events: Array.isArray(data.events) ? data.events : [],
     });
   } catch (error) {
     console.error("Failed to fetch data:", error);

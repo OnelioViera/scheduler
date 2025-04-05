@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { Task, useScheduleStore } from "../store/scheduleStore";
 import { format } from "date-fns";
@@ -8,6 +10,10 @@ import {
   TrashIcon,
 } from "@heroicons/react/24/outline";
 
+interface TaskListProps {
+  readOnly?: boolean;
+}
+
 // Priority order for sorting
 const priorityOrder = {
   high: 0,
@@ -15,7 +21,7 @@ const priorityOrder = {
   low: 2,
 };
 
-export default function TaskList() {
+export default function TaskList({ readOnly = false }: TaskListProps) {
   const { tasks, updateTask, deleteTask, loadTasks, isLoading, error } =
     useScheduleStore();
   const [editingTask, setEditingTask] = useState<string | null>(null);
@@ -97,16 +103,18 @@ export default function TaskList() {
             }`}
           >
             <div className="flex items-center space-x-4">
-              <button
-                onClick={() => handleToggleComplete(task.id, !task.completed)}
-                className="focus:outline-none"
-              >
-                {task.completed ? (
-                  <CheckCircleIcon className="w-6 h-6 text-green-500" />
-                ) : (
-                  <XCircleIcon className="w-6 h-6 text-gray-300" />
-                )}
-              </button>
+              {!readOnly && (
+                <button
+                  onClick={() => handleToggleComplete(task.id, !task.completed)}
+                  className="focus:outline-none"
+                >
+                  {task.completed ? (
+                    <CheckCircleIcon className="w-6 h-6 text-green-500" />
+                  ) : (
+                    <XCircleIcon className="w-6 h-6 text-gray-300" />
+                  )}
+                </button>
+              )}
               <div>
                 {editingTask === task.id ? (
                   <div className="flex items-center space-x-2">
@@ -132,7 +140,7 @@ export default function TaskList() {
                   </div>
                 ) : (
                   <h3
-                    className={`text-lg font-medium ${
+                    className={`text-lg font-semibold ${
                       task.completed
                         ? "line-through text-gray-500"
                         : "text-gray-900"
@@ -153,7 +161,8 @@ export default function TaskList() {
                       task.priority
                     )}`}
                   >
-                    {task.priority}
+                    {task.priority.charAt(0).toUpperCase() +
+                      task.priority.slice(1)}
                   </span>
                   {task.tags.map((tag: string) => (
                     <span
@@ -167,7 +176,7 @@ export default function TaskList() {
               </div>
             </div>
             <div className="flex space-x-2">
-              {!editingTask && (
+              {!editingTask && !readOnly && (
                 <>
                   <button
                     onClick={() => handleStartEdit(task)}
