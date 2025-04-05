@@ -1,9 +1,11 @@
-/* Tailwind base styles */
-@tailwind base;
-/* Tailwind component styles */
-@tailwind components;
-/* Tailwind utility styles */
-@tailwind utilities;
+/* Tailwind's base styles */
+@import "tailwindcss/base";
+
+/* Tailwind's component styles */
+@import "tailwindcss/components";
+
+/* Tailwind's utility styles */
+@import "tailwindcss/utilities";
 
 :root {
   --background: #ffffff;
