@@ -24,8 +24,14 @@ interface StoredTask extends Omit<Task, "dueDate"> {
   dueDate: string | null;
 }
 
+interface StoredEvent extends Omit<Event, "start" | "end"> {
+  start: string;
+  end: string;
+}
+
 interface ApiResponse {
   tasks: StoredTask[];
+  events: StoredEvent[];
   error?: string;
 }
 
@@ -37,30 +43,37 @@ interface ScheduleState {
   addTask: (task: Omit<Task, "id">) => Promise<void>;
   updateTask: (id: string, task: Partial<Task>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
-  addEvent: (event: Omit<Event, "id">) => void;
-  updateEvent: (id: string, event: Partial<Event>) => void;
-  deleteEvent: (id: string) => void;
+  addEvent: (event: Omit<Event, "id">) => Promise<void>;
+  updateEvent: (id: string, event: Partial<Event>) => Promise<void>;
+  deleteEvent: (id: string) => Promise<void>;
   loadTasks: () => Promise<void>;
 }
 
-// Helper function to save tasks to Blob storage
-async function saveTasks(tasks: Task[]) {
+// Helper function to save data to Blob storage
+async function saveData(tasks: Task[], events: Event[]) {
   try {
     const response = await fetch("/api/blob", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ tasks }),
+      body: JSON.stringify({
+        tasks,
+        events: events.map((event) => ({
+          ...event,
+          start: event.start.toISOString(),
+          end: event.end.toISOString(),
+        })),
+      }),
     });
 
     if (!response.ok) {
-      throw new Error("Failed to save tasks");
+      throw new Error("Failed to save data");
     }
   } catch (error: unknown) {
     const errorMessage =
-      error instanceof Error ? error.message : "Failed to save tasks";
-    console.error("Error saving tasks:", errorMessage);
+      error instanceof Error ? error.message : "Failed to save data";
+    console.error("Error saving data:", errorMessage);
     throw error;
   }
 }
@@ -76,20 +89,26 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
     try {
       const response = await fetch("/api/blob");
       if (!response.ok) {
-        throw new Error("Failed to load tasks");
+        throw new Error("Failed to load data");
       }
       const data: ApiResponse = await response.json();
+
       set({
         tasks: data.tasks.map((task: StoredTask) => ({
           ...task,
           dueDate: task.dueDate ? new Date(task.dueDate) : null,
         })),
+        events: (data.events || []).map((event: StoredEvent) => ({
+          ...event,
+          start: new Date(event.start),
+          end: new Date(event.end),
+        })),
         isLoading: false,
       });
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error ? error.message : "Failed to load tasks";
-      console.error("Error loading tasks:", errorMessage);
+        error instanceof Error ? error.message : "Failed to load data";
+      console.error("Error loading data:", errorMessage);
       set({ error: errorMessage, isLoading: false });
     }
   },
@@ -104,11 +123,10 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
     set((state) => ({ tasks: [...state.tasks, newTask] }));
 
     try {
-      await saveTasks([...get().tasks]);
+      await saveData([...get().tasks], get().events);
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to save task";
-      // Rollback on error
       set((state) => ({
         tasks: state.tasks.filter((t) => t.id !== newTask.id),
         error: errorMessage,
@@ -134,11 +152,10 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
     }));
 
     try {
-      await saveTasks(get().tasks);
+      await saveData(get().tasks, get().events);
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to update task";
-      // Rollback on error
       set({
         tasks: previousTasks,
         error: errorMessage,
@@ -154,11 +171,10 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
     }));
 
     try {
-      await saveTasks(get().tasks);
+      await saveData(get().tasks, get().events);
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to delete task";
-      // Rollback on error
       set({
         tasks: previousTasks,
         error: errorMessage,
@@ -166,21 +182,33 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
     }
   },
 
-  // Event methods remain unchanged for now
-  addEvent: (event: Omit<Event, "id">) =>
-    set((state) => ({
-      events: [
-        ...state.events,
-        {
-          ...event,
-          id: uuidv4(),
-          start: new Date(event.start),
-          end: new Date(event.end),
-        },
-      ],
-    })),
+  addEvent: async (event: Omit<Event, "id">) => {
+    const newEvent = {
+      ...event,
+      id: uuidv4(),
+      start: new Date(event.start),
+      end: new Date(event.end),
+    };
 
-  updateEvent: (id: string, updatedEvent: Partial<Event>) =>
+    set((state) => ({
+      events: [...state.events, newEvent],
+    }));
+
+    try {
+      await saveData(get().tasks, [...get().events]);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to save event";
+      set((state) => ({
+        events: state.events.filter((e) => e.id !== newEvent.id),
+        error: errorMessage,
+      }));
+    }
+  },
+
+  updateEvent: async (id: string, updatedEvent: Partial<Event>) => {
+    const previousEvents = get().events;
+
     set((state) => ({
       events: state.events.map((event) =>
         event.id === id
@@ -194,10 +222,36 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
             }
           : event
       ),
-    })),
+    }));
 
-  deleteEvent: (id: string) =>
+    try {
+      await saveData(get().tasks, get().events);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to update event";
+      set({
+        events: previousEvents,
+        error: errorMessage,
+      });
+    }
+  },
+
+  deleteEvent: async (id: string) => {
+    const previousEvents = get().events;
+
     set((state) => ({
       events: state.events.filter((event) => event.id !== id),
-    })),
+    }));
+
+    try {
+      await saveData(get().tasks, get().events);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to delete event";
+      set({
+        events: previousEvents,
+        error: errorMessage,
+      });
+    }
+  },
 }));

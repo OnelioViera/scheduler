@@ -1,16 +1,16 @@
 import { put, list, del } from "@vercel/blob";
 import { NextResponse } from "next/server";
 
-const TASKS_PREFIX = "tasks";
+const DATA_PREFIX = "scheduler-data";
 
-// Helper to get the latest tasks blob
-async function getLatestTasksBlob() {
+// Helper to get the latest data blob
+async function getLatestDataBlob() {
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     throw new Error("BLOB_READ_WRITE_TOKEN is not configured");
   }
 
   const { blobs } = await list({
-    prefix: TASKS_PREFIX,
+    prefix: DATA_PREFIX,
     limit: 1,
     token: process.env.BLOB_READ_WRITE_TOKEN,
   });
@@ -23,18 +23,18 @@ export async function POST(request: Request) {
       throw new Error("BLOB_READ_WRITE_TOKEN is not configured");
     }
 
-    const { tasks } = await request.json();
+    const { tasks, events } = await request.json();
 
-    if (!Array.isArray(tasks)) {
+    if (!Array.isArray(tasks) || !Array.isArray(events)) {
       return NextResponse.json(
-        { error: "Invalid tasks data format" },
+        { error: "Invalid data format" },
         { status: 400 }
       );
     }
 
     // Delete the previous blob if it exists
     try {
-      const previousBlob = await getLatestTasksBlob();
+      const previousBlob = await getLatestDataBlob();
       if (previousBlob) {
         await del(previousBlob.url, {
           token: process.env.BLOB_READ_WRITE_TOKEN,
@@ -47,8 +47,8 @@ export async function POST(request: Request) {
 
     // Store new data
     const blob = await put(
-      `${TASKS_PREFIX}-${Date.now()}.json`,
-      JSON.stringify(tasks),
+      `${DATA_PREFIX}-${Date.now()}.json`,
+      JSON.stringify({ tasks, events }),
       {
         contentType: "application/json",
         token: process.env.BLOB_READ_WRITE_TOKEN,
@@ -71,10 +71,10 @@ export async function GET() {
       throw new Error("BLOB_READ_WRITE_TOKEN is not configured");
     }
 
-    const latestBlob = await getLatestTasksBlob();
+    const latestBlob = await getLatestDataBlob();
 
     if (!latestBlob) {
-      return NextResponse.json({ tasks: [] });
+      return NextResponse.json({ tasks: [], events: [] });
     }
 
     const response = await fetch(latestBlob.url);
@@ -82,8 +82,11 @@ export async function GET() {
       throw new Error("Failed to fetch blob data");
     }
 
-    const tasks = await response.json();
-    return NextResponse.json({ tasks });
+    const data = await response.json();
+    return NextResponse.json({
+      tasks: data.tasks || [],
+      events: data.events || [],
+    });
   } catch (error) {
     console.error("Failed to fetch data:", error);
     const errorMessage =

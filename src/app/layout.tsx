@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { Toaster } from "react-hot-toast";
 import "./globals.css";
+import { Toaster } from "react-hot-toast";
+import StoreInitializer from "../components/StoreInitializer";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -12,12 +13,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en">
       <body className={inter.className}>
+        <StoreInitializer />
+        {children}
         <Toaster
           position="top-right"
           toastOptions={{
@@ -29,7 +32,6 @@ export default function RootLayout({
             },
           }}
         />
-        {children}
       </body>
     </html>
   );
