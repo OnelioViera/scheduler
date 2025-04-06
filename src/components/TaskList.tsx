@@ -9,6 +9,7 @@ import {
   PencilIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
+import TaskModal from "./TaskModal";
 
 interface TaskListProps {
   readOnly?: boolean;
@@ -24,8 +25,8 @@ const priorityOrder = {
 export default function TaskList({ readOnly = false }: TaskListProps) {
   const { tasks, updateTask, deleteTask, loadTasks, isLoading, error } =
     useScheduleStore();
-  const [editingTask, setEditingTask] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   useEffect(() => {
     loadTasks();
@@ -61,21 +62,23 @@ export default function TaskList({ readOnly = false }: TaskListProps) {
   };
 
   const handleStartEdit = (task: Task) => {
-    setEditingTask(task.id);
-    setEditTitle(task.title);
+    setSelectedTask(task);
+    setIsModalOpen(true);
   };
 
-  const handleSaveEdit = (taskId: string) => {
-    if (editTitle.trim()) {
-      updateTask(taskId, { title: editTitle });
-      setEditingTask(null);
-      setEditTitle("");
+  const handleSaveTask = (taskData: {
+    title: string;
+    description: string;
+    priority: Task["priority"];
+    dueDate: string;
+    tags: string[];
+  }) => {
+    if (selectedTask) {
+      updateTask(selectedTask.id, {
+        ...taskData,
+        dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
+      });
     }
-  };
-
-  const handleCancelEdit = () => {
-    setEditingTask(null);
-    setEditTitle("");
   };
 
   const getPriorityColor = (priority: Task["priority"]) => {
@@ -93,7 +96,6 @@ export default function TaskList({ readOnly = false }: TaskListProps) {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-2xl font-bold text-[#1e40af]">Tasks</h2>
       <div className="space-y-2">
         {sortedTasks.map((task: Task) => (
           <div
@@ -115,47 +117,27 @@ export default function TaskList({ readOnly = false }: TaskListProps) {
                   )}
                 </button>
               )}
-              <div>
-                {editingTask === task.id ? (
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="text"
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
-                      className="px-2 py-1 border rounded-md"
-                      autoFocus
-                    />
-                    <button
-                      onClick={() => handleSaveEdit(task.id)}
-                      className="px-2 py-1 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={handleCancelEdit}
-                      className="px-2 py-1 text-sm bg-gray-500 text-white rounded-md hover:bg-gray-600"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <h3
-                    className={`text-lg font-semibold ${
-                      task.completed
-                        ? "line-through text-gray-500"
-                        : "text-gray-900"
-                    }`}
-                  >
-                    {task.title}
-                  </h3>
-                )}
-                <p className="text-sm text-gray-700">{task.description}</p>
-                {task.dueDate && (
-                  <p className="text-sm text-gray-700">
-                    Due: {format(new Date(task.dueDate), "PPP")}
+              <div className="flex-1">
+                <h3
+                  className={`text-lg font-semibold ${
+                    task.completed
+                      ? "line-through text-gray-500"
+                      : "text-gray-900"
+                  }`}
+                >
+                  {task.title}
+                </h3>
+                {task.description && (
+                  <p className="text-sm text-gray-700 mt-1">
+                    {task.description}
                   </p>
                 )}
-                <div className="flex space-x-2 mt-1">
+                <div className="flex items-center gap-2 mt-2">
+                  {task.dueDate && (
+                    <p className="text-sm text-gray-700">
+                      Due: {format(new Date(task.dueDate), "PPP")}
+                    </p>
+                  )}
                   <span
                     className={`text-sm font-medium ${getPriorityColor(
                       task.priority
@@ -176,7 +158,7 @@ export default function TaskList({ readOnly = false }: TaskListProps) {
               </div>
             </div>
             <div className="flex space-x-2">
-              {!editingTask && !readOnly && (
+              {!readOnly && (
                 <>
                   <button
                     onClick={() => handleStartEdit(task)}
@@ -196,6 +178,37 @@ export default function TaskList({ readOnly = false }: TaskListProps) {
           </div>
         ))}
       </div>
+
+      {!readOnly && (
+        <TaskModal
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false);
+            setSelectedTask(null);
+          }}
+          onSave={handleSaveTask}
+          onDelete={
+            selectedTask ? () => handleDelete(selectedTask.id) : undefined
+          }
+          mode={selectedTask ? "edit" : "add"}
+          defaultValues={
+            selectedTask
+              ? {
+                  title: selectedTask.title,
+                  description: selectedTask.description || "",
+                  priority: selectedTask.priority,
+                  dueDate: selectedTask.dueDate
+                    ? format(
+                        new Date(selectedTask.dueDate),
+                        "yyyy-MM-dd'T'HH:mm"
+                      )
+                    : "",
+                  tags: selectedTask.tags,
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }
